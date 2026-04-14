@@ -35,7 +35,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, default=ROOT / "outputs")
     parser.add_argument("--powerline-hz", type=float, default=60.0)
     parser.add_argument("--highpass-hz", type=float, default=0.5)
-    parser.add_argument("--lowpass-hz", type=float, default=40.0)
+    parser.add_argument("--lowpass-hz", "--kaiser-cutoff-hz", dest="kaiser_cutoff_hz", type=float, default=40.0)
+    parser.add_argument("--kaiser-transition-hz", type=float, default=8.0)
+    parser.add_argument("--kaiser-atten-db", type=float, default=60.0)
     parser.add_argument("--notch-bandwidth-hz", type=float, default=2.0)
     parser.add_argument("--causal-only", action="store_true")
     parser.add_argument("--edge-pad-sec", type=float, default=1.5)
@@ -79,9 +81,11 @@ def main() -> None:
 
     cfg = DenoiseConfig(
         highpass_cutoff_hz=args.highpass_hz,
-        lowpass_cutoff_hz=args.lowpass_hz,
         powerline_hz=args.powerline_hz,
         notch_bandwidth_hz=args.notch_bandwidth_hz,
+        kaiser_cutoff_hz=args.kaiser_cutoff_hz,
+        kaiser_transition_hz=args.kaiser_transition_hz,
+        kaiser_attenuation_db=args.kaiser_atten_db,
         zero_phase=not args.causal_only,
         edge_pad_seconds=max(0.0, args.edge_pad_sec),
     )

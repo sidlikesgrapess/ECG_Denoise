@@ -19,10 +19,11 @@ No external denoising library is used.
 - MIT format 212 waveform decoder for `.dat` files
 - Physical unit conversion to mV using ADC baseline and gain from headers
 - Pure transfer-function denoising pipeline:
-  - Baseline wander removal (1st-order high-pass)
-  - Powerline interference removal (2nd-order notch, optional 2nd harmonic)
-  - High-frequency smoothing (1st-order low-pass)
-- Optional zero-phase application of the same filter cascade (forward-backward)
+  - DC removal (mean subtraction)
+  - Butterworth high-pass filter (IIR)
+  - Powerline interference removal (IIR notch, optional 2nd harmonic)
+  - Kaiser-window FIR low-pass smoothing
+- Optional zero-phase application of the IIR cascade (forward-backward)
 - Reflection edge padding to reduce boundary transients on short windows
 - Quantitative spectral noise metrics
 - Plot generation and CSV export for short segments
@@ -30,9 +31,10 @@ No external denoising library is used.
 
 ## Filter Transfer Functions
 
-The filters are implemented directly from transfer functions.
+The filters are implemented directly from transfer functions or windowed FIR design,
+with each stage in a separate Python file for collaboration.
 
-### High-pass (baseline wander removal)
+### Butterworth High-pass (baseline wander removal)
 
 Analog prototype:
 
@@ -47,17 +49,6 @@ Difference equation:
 
 y[n] = b0 x[n] + b1 x[n-1] - a1 y[n-1]
 
-### Low-pass (muscle noise suppression)
-
-Analog prototype:
-
-H(s) = wc / (s + wc)
-
-Digital coefficients:
-
-- b = [wc/(2fs+wc), wc/(2fs+wc)]
-- a = [1, (wc-2fs)/(2fs+wc)]
-
 ### Notch (powerline)
 
 Digital notch section:
@@ -66,14 +57,26 @@ H(z) = (1 - 2cos(w0)z^-1 + z^-2) / (1 - 2r cos(w0)z^-1 + r^2 z^-2)
 
 where w0 = 2pi f0 / fs.
 
+### Kaiser FIR (high-frequency smoothing)
+
+Low-pass FIR taps are built by windowing the ideal sinc impulse response:
+
+- h_ideal[n] = 2(fc/fs) sinc(2(fc/fs)(n-M/2))
+- h[n] = h_ideal[n] * w_kaiser[n]
+
 ## Project Structure
 
 ```
 src/ecg_denoise/
   analysis.py
+  butterworth_hpf.py
+  dc_removal.py
   denoise.py
   filters.py
+  iir_core.py
+  kaiser_fir.py
   mitdb_io.py
+  notch_iir.py
 scripts/
   run_denoise_demo.py
 tests/
@@ -116,6 +119,12 @@ Change edge padding used for short-segment stability:
 
 ```bash
 python scripts/run_denoise_demo.py --edge-pad-sec 2.0
+```
+
+Adjust Kaiser FIR parameters:
+
+```bash
+python scripts/run_denoise_demo.py --kaiser-cutoff-hz 35 --kaiser-transition-hz 6 --kaiser-atten-db 60
 ```
 
 Results are saved in `outputs/`:
