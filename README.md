@@ -22,6 +22,8 @@ No external denoising library is used.
   - Baseline wander removal (1st-order high-pass)
   - Powerline interference removal (2nd-order notch, optional 2nd harmonic)
   - High-frequency smoothing (1st-order low-pass)
+- Optional zero-phase application of the same filter cascade (forward-backward)
+- Reflection edge padding to reduce boundary transients on short windows
 - Quantitative spectral noise metrics
 - Plot generation and CSV export for short segments
 - Automated tests for filters and end-to-end short-segment pipeline
@@ -102,6 +104,18 @@ Example with CSV export:
 
 ```bash
 python scripts/run_denoise_demo.py --save-csv
+```
+
+Run in strict one-pass causal mode (same filters, no reverse pass):
+
+```bash
+python scripts/run_denoise_demo.py --causal-only --save-csv
+```
+
+Change edge padding used for short-segment stability:
+
+```bash
+python scripts/run_denoise_demo.py --edge-pad-sec 2.0
 ```
 
 Results are saved in `outputs/`:

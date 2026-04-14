@@ -37,6 +37,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--highpass-hz", type=float, default=0.5)
     parser.add_argument("--lowpass-hz", type=float, default=40.0)
     parser.add_argument("--notch-bandwidth-hz", type=float, default=2.0)
+    parser.add_argument("--causal-only", action="store_true")
+    parser.add_argument("--edge-pad-sec", type=float, default=1.5)
     parser.add_argument("--save-csv", action="store_true")
     return parser.parse_args()
 
@@ -80,6 +82,8 @@ def main() -> None:
         lowpass_cutoff_hz=args.lowpass_hz,
         powerline_hz=args.powerline_hz,
         notch_bandwidth_hz=args.notch_bandwidth_hz,
+        zero_phase=not args.causal_only,
+        edge_pad_seconds=max(0.0, args.edge_pad_sec),
     )
 
     summary_rows: list[dict[str, float | str]] = []
