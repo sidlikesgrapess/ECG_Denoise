@@ -17,6 +17,10 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from ecg_denoise import DenoiseConfig, compute_noise_metrics, denoise_ecg, load_record_segment
+from ecg_denoise.dc_removal import remove_dc_mean
+from ecg_denoise.denoise import build_filter_sections
+from ecg_denoise.iir_core import FilterSection, cascade_iir
+from ecg_denoise.kaiser_fir import apply_fir_filter, design_kaiser_lowpass_fir
 
 
 DEFAULT_RECORDS = ["100", "101", "102", "200", "201", "202"]
@@ -55,6 +59,7 @@ def save_overlay_plot(
     denoised_mv: np.ndarray,
     record_id: str,
     lead_name: str,
+    comparison_label: str | None = None,
 ) -> None:
     residual = raw_mv - denoised_mv
     fig, axes = plt.subplots(2, 1, figsize=(11, 6), sharex=True, constrained_layout=True)
@@ -62,7 +67,10 @@ def save_overlay_plot(
     axes[0].plot(time_s, raw_mv, color="tab:blue", linewidth=0.9, alpha=0.8, label="Raw")
     axes[0].plot(time_s, denoised_mv, color="tab:green", linewidth=1.0, label="Denoised")
     axes[0].set_ylabel("Amplitude (mV)")
-    axes[0].set_title(f"Record {record_id} ({lead_name})")
+    if comparison_label:
+        axes[0].set_title(f"Record {record_id} ({lead_name}) - {comparison_label}")
+    else:
+        axes[0].set_title(f"Record {record_id} ({lead_name})")
     axes[0].legend(loc="upper right")
     axes[0].grid(True, alpha=0.3)
 
@@ -73,6 +81,71 @@ def save_overlay_plot(
 
     fig.savefig(output_path, dpi=160)
     plt.close(fig)
+
+
+def _reflect_pad(signal: np.ndarray, pad_len: int) -> tuple[np.ndarray, int]:
+    x = np.asarray(signal, dtype=np.float64)
+    if x.size <= 1 or pad_len <= 0:
+        return x, 0
+
+    effective_pad = min(pad_len, x.size - 1)
+    return np.pad(x, (effective_pad, effective_pad), mode="reflect"), effective_pad
+
+
+def _apply_stage_iir(
+    signal: np.ndarray,
+    sections: list[FilterSection],
+    fs: float,
+    *,
+    zero_phase: bool,
+    edge_pad_seconds: float,
+) -> np.ndarray:
+    x = remove_dc_mean(np.asarray(signal, dtype=np.float64))
+    if not sections:
+        return x
+
+    if zero_phase:
+        pad_len = max(0, int(round(edge_pad_seconds * fs)))
+        padded, used_pad = _reflect_pad(x, pad_len)
+        forward = cascade_iir(padded, sections)
+        backward = cascade_iir(forward[::-1], sections)
+        y = backward[::-1]
+        if used_pad > 0:
+            y = y[used_pad:-used_pad]
+        return y
+
+    return cascade_iir(x, sections)
+
+
+def compute_stage_only_outputs(raw_mv: np.ndarray, fs: float, cfg: DenoiseConfig) -> dict[str, np.ndarray]:
+    sections = build_filter_sections(fs, cfg)
+    x_dc_removed = remove_dc_mean(np.asarray(raw_mv, dtype=np.float64))
+
+    stage_outputs: dict[str, np.ndarray] = {
+        "butterworth_only": _apply_stage_iir(
+            raw_mv,
+            sections[:1],
+            fs,
+            zero_phase=cfg.zero_phase,
+            edge_pad_seconds=cfg.edge_pad_seconds,
+        ),
+        "notch_only": _apply_stage_iir(
+            raw_mv,
+            sections[1:],
+            fs,
+            zero_phase=cfg.zero_phase,
+            edge_pad_seconds=cfg.edge_pad_seconds,
+        ),
+    }
+
+    kaiser_taps = design_kaiser_lowpass_fir(
+        fs,
+        cfg.kaiser_cutoff_hz,
+        transition_hz=cfg.kaiser_transition_hz,
+        attenuation_db=cfg.kaiser_attenuation_db,
+    )
+    stage_outputs["kaiser_only"] = apply_fir_filter(x_dc_removed, kaiser_taps)
+    return stage_outputs
 
 
 def save_snr_plot(output_path: Path, summary_rows: list[dict[str, float | str]]) -> None:
@@ -204,8 +277,35 @@ def main() -> None:
             print(f"{k}: {v:.3f}")
 
         lead_name = header.channels[args.channel].lead_name
+        stage_only_outputs = compute_stage_only_outputs(raw_mv, fs, cfg)
+
+        stage_plot_specs = [
+            ("butterworth_only", "Butterworth only"),
+            ("notch_only", "Notch only"),
+            ("kaiser_only", "Kaiser only"),
+        ]
+        for stage_key, stage_label in stage_plot_specs:
+            stage_plot_path = args.output_dir / f"record_{record_id}_{stage_key}.png"
+            save_overlay_plot(
+                stage_plot_path,
+                time_s,
+                raw_mv,
+                stage_only_outputs[stage_key],
+                record_id,
+                lead_name,
+                comparison_label=stage_label,
+            )
+
         plot_path = args.output_dir / f"record_{record_id}_segment.png"
-        save_overlay_plot(plot_path, time_s, raw_mv, denoised_mv, record_id, lead_name)
+        save_overlay_plot(
+            plot_path,
+            time_s,
+            raw_mv,
+            denoised_mv,
+            record_id,
+            lead_name,
+            comparison_label="All stages",
+        )
 
         if args.save_csv:
             csv_path = args.output_dir / f"record_{record_id}_segment.csv"
