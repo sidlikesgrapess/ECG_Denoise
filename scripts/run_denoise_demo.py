@@ -1,4 +1,5 @@
 from __future__ import annotations
+from src.ecg_denoise.analysis import compute_noise_metrics, plot_ecg_signals
 
 import argparse
 import csv
@@ -7,6 +8,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = ROOT / "src"
@@ -103,7 +105,13 @@ def main() -> None:
         )
         denoised_mv, _sections = denoise_ecg(raw_mv, fs, config=cfg)
         metrics = compute_noise_metrics(raw_mv, denoised_mv, fs, powerline_hz=args.powerline_hz)
+        print("\n=== METRICS ===")
+        for k, v in metrics.items():
+            print(f"{k}: {v:.3f}")
 
+        from src.ecg_denoise.analysis import plot_ecg_signals
+        plot_ecg_signals(raw_mv, denoised_mv, fs)
+        
         lead_name = header.channels[args.channel].lead_name
         plot_path = args.output_dir / f"record_{record_id}_segment.png"
         save_overlay_plot(plot_path, time_s, raw_mv, denoised_mv, record_id, lead_name)

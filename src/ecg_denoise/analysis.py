@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 def _band_power(signal: np.ndarray, fs: float, low_hz: float, high_hz: float) -> float:
@@ -52,10 +53,54 @@ def compute_noise_metrics(
     raw_std = float(np.std(raw_signal))
     residual_pct = float((100.0 * residual_rms / raw_std) if raw_std > 0 else 0.0)
 
+    noise = raw_signal - denoised_signal
+
+    signal_power = np.mean(denoised_signal ** 2)
+    noise_power = np.mean(noise ** 2)
+
+    snr_db = 10 * np.log10((signal_power + 1e-12) / (noise_power + 1e-12))
     return {
+        "snr_db": snr_db,
         "baseline_reduction_db": _db_ratio(baseline_raw, baseline_denoised),
         "high_freq_reduction_db": _db_ratio(hf_raw, hf_denoised),
         "powerline_reduction_db": _db_ratio(line_raw, line_denoised),
         "residual_rms_mv": residual_rms,
         "residual_vs_raw_std_pct": residual_pct,
-    }
+        }
+
+
+
+def plot_ecg_signals(raw_signal, denoised_signal, fs):
+    t = np.arange(len(raw_signal)) / fs
+
+    plt.figure(figsize=(12, 5))
+
+    plt.plot(t, raw_signal, label="Raw ECG", alpha=0.5)
+    plt.plot(t, denoised_signal, label="Denoised ECG", linewidth=2)
+
+    plt.title("ECG Signal Denoising")
+    plt.xlabel("Time (seconds)")
+    plt.ylabel("Amplitude")
+    plt.legend()
+    plt.grid()
+
+    plt.show()
+
+    import scipy.signal as signal
+
+def plot_pole_zero(b, a):
+    z, p, _ = signal.tf2zpk(b, a)
+
+    plt.figure()
+    plt.scatter(np.real(z), np.imag(z), label="Zeros", marker='o')
+    plt.scatter(np.real(p), np.imag(p), label="Poles", marker='x')
+
+    circle = plt.Circle((0, 0), 1, fill=False)
+    plt.gca().add_artist(circle)
+
+    plt.title("Pole-Zero Plot")
+    plt.legend()
+    plt.grid()
+    plt.axis('equal')
+
+    plt.show()
