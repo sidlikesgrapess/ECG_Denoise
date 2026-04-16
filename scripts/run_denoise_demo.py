@@ -97,6 +97,7 @@ def save_pole_zero_stability_plot(
     sections: list[tuple[np.ndarray, np.ndarray]],
     powerline_hz: float,
 ) -> None:
+    # Madhura Bhattu: final visualization for pole-zero stability.
     fig, ax = plt.subplots(figsize=(6.5, 6.5), constrained_layout=True)
 
     theta = np.linspace(0.0, 2.0 * np.pi, 800)

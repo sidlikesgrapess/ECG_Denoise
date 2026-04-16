@@ -32,6 +32,7 @@ def design_kaiser_lowpass_fir(
     transition_hz: float = 8.0,
     attenuation_db: float = 60.0,
 ) -> np.ndarray:
+    # Anuvi Pareek: Kaiser FIR LPF design, windowing, DTFT analysis.
     """Design a low-pass FIR using a Kaiser windowed-sinc method."""
     if fs <= 0 or cutoff_hz <= 0:
         raise ValueError("fs and cutoff_hz must be positive")

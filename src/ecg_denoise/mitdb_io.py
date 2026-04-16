@@ -148,6 +148,7 @@ def load_record_segment(
     duration_sec: float = 10.0,
     to_millivolts: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, float, RecordHeader]:
+    # Riyan Dhiren Shah: dataset loading and clean segment extraction.
     """Load a short segment from one MIT-BIH record."""
     if duration_sec <= 0:
         raise ValueError("duration_sec must be positive")

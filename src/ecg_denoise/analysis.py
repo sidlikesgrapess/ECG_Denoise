@@ -40,6 +40,7 @@ def compute_noise_metrics(
     *,
     powerline_hz: float = 60.0,
 ) -> dict[str, float]:
+    # Madhura Bhattu: SNR computation.
     """Compute simple spectral metrics to quantify denoising effectiveness."""
     nyquist = fs / 2.0
     high_band_low = min(45.0, nyquist - 1.0)
@@ -94,6 +95,7 @@ def plot_ecg_signals(raw_signal, denoised_signal, fs):
     plt.show()
 
 def plot_pole_zero(b, a):
+    # Madhura Bhattu: pole-zero stability visualization.
     b = np.asarray(b, dtype=np.float64)
     a = np.asarray(a, dtype=np.float64)
     if b.ndim != 1 or a.ndim != 1 or b.size < 1 or a.size < 1:
