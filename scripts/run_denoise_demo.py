@@ -92,7 +92,11 @@ def save_snr_plot(output_path: Path, summary_rows: list[dict[str, float | str]])
     plt.close(fig)
 
 
-def save_pole_zero_stability_plot(output_path: Path, sections: list[tuple[np.ndarray, np.ndarray]]) -> None:
+def save_pole_zero_stability_plot(
+    output_path: Path,
+    sections: list[tuple[np.ndarray, np.ndarray]],
+    powerline_hz: float,
+) -> None:
     fig, ax = plt.subplots(figsize=(6.5, 6.5), constrained_layout=True)
 
     theta = np.linspace(0.0, 2.0 * np.pi, 800)
@@ -106,7 +110,14 @@ def save_pole_zero_stability_plot(output_path: Path, sections: list[tuple[np.nda
         zeros = np.roots(b) if len(b) > 1 else np.array([], dtype=np.complex128)
         poles = np.roots(a) if len(a) > 1 else np.array([], dtype=np.complex128)
         color = section_colors[idx % len(section_colors)]
-        section_id = f"Section {idx + 1}"
+        if idx == 0:
+            section_id = "HPF"
+        elif idx == 1:
+            section_id = f"N{powerline_hz:g}"
+        elif idx == 2:
+            section_id = f"N{2.0 * powerline_hz:g}"
+        else:
+            section_id = f"S{idx + 1}"
 
         if zeros.size > 0:
             ax.scatter(
@@ -117,7 +128,7 @@ def save_pole_zero_stability_plot(output_path: Path, sections: list[tuple[np.nda
                 edgecolors=color,
                 s=70,
                 linewidths=1.4,
-                label=f"{section_id} zeros",
+                label=f"{section_id} z",
             )
 
         if poles.size > 0:
@@ -128,7 +139,7 @@ def save_pole_zero_stability_plot(output_path: Path, sections: list[tuple[np.nda
                 color=color,
                 s=70,
                 linewidths=1.6,
-                label=f"{section_id} poles",
+                label=f"{section_id} p",
             )
 
             pole_radii = np.abs(poles)
@@ -147,9 +158,9 @@ def save_pole_zero_stability_plot(output_path: Path, sections: list[tuple[np.nda
 
     status = "Stable" if all_stable else "Unstable"
     ax.set_title(f"Pole-Zero Stability ({status}, max |p| = {max_radius:.4f})")
-    ax.legend(loc="upper right", fontsize=8)
+    ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), fontsize=8, frameon=False)
 
-    fig.savefig(output_path, dpi=180)
+    fig.savefig(output_path, dpi=180, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -247,7 +258,7 @@ def main() -> None:
 
     if reference_sections:
         pz_plot_path = args.output_dir / "pole_zero_stability.png"
-        save_pole_zero_stability_plot(pz_plot_path, reference_sections)
+        save_pole_zero_stability_plot(pz_plot_path, reference_sections, args.powerline_hz)
 
     print(f"Saved plots and metrics to: {args.output_dir}")
 

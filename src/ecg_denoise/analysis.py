@@ -25,6 +25,14 @@ def _db_ratio(raw_value: float, denoised_value: float) -> float:
     return float(10.0 * np.log10((raw_value + eps) / (denoised_value + eps)))
 
 
+def _mean_aligned_pair(raw_signal: np.ndarray, denoised_signal: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    raw = np.asarray(raw_signal, dtype=np.float64)
+    denoised = np.asarray(denoised_signal, dtype=np.float64)
+    if raw.shape != denoised.shape:
+        raise ValueError("raw_signal and denoised_signal must have the same shape")
+    return raw - np.mean(raw), denoised - np.mean(denoised)
+
+
 def compute_noise_metrics(
     raw_signal: np.ndarray,
     denoised_signal: np.ndarray,
@@ -48,15 +56,14 @@ def compute_noise_metrics(
     line_raw = _band_power(raw_signal, fs, line_low, line_high)
     line_denoised = _band_power(denoised_signal, fs, line_low, line_high)
 
-    residual = np.asarray(raw_signal, dtype=np.float64) - np.asarray(denoised_signal, dtype=np.float64)
+    raw_centered, denoised_centered = _mean_aligned_pair(raw_signal, denoised_signal)
+    residual = raw_centered - denoised_centered
     residual_rms = float(np.sqrt(np.mean(residual**2)))
-    raw_std = float(np.std(raw_signal))
+    raw_std = float(np.std(raw_centered))
     residual_pct = float((100.0 * residual_rms / raw_std) if raw_std > 0 else 0.0)
 
-    noise = raw_signal - denoised_signal
-
-    signal_power = np.mean(denoised_signal ** 2)
-    noise_power = np.mean(noise ** 2)
+    signal_power = np.mean(denoised_centered ** 2)
+    noise_power = np.mean(residual ** 2)
 
     snr_db = 10 * np.log10((signal_power + 1e-12) / (noise_power + 1e-12))
     return {
@@ -87,23 +94,29 @@ def plot_ecg_signals(raw_signal, denoised_signal, fs):
     plt.show()
 
 def plot_pole_zero(b, a):
-    try:
-        import scipy.signal as signal
-    except ModuleNotFoundError as exc:
-        raise ModuleNotFoundError("scipy is required for plot_pole_zero") from exc
+    b = np.asarray(b, dtype=np.float64)
+    a = np.asarray(a, dtype=np.float64)
+    if b.ndim != 1 or a.ndim != 1 or b.size < 1 or a.size < 1:
+        raise ValueError("b and a must be non-empty 1D coefficient arrays")
 
-    z, p, _ = signal.tf2zpk(b, a)
+    zeros = np.roots(b) if b.size > 1 else np.array([], dtype=np.complex128)
+    poles = np.roots(a) if a.size > 1 else np.array([], dtype=np.complex128)
 
-    plt.figure()
-    plt.scatter(np.real(z), np.imag(z), label="Zeros", marker='o')
-    plt.scatter(np.real(p), np.imag(p), label="Poles", marker='x')
+    fig, ax = plt.subplots()
+    if zeros.size > 0:
+        ax.scatter(np.real(zeros), np.imag(zeros), label="Zeros", marker="o", facecolors="none")
+    if poles.size > 0:
+        ax.scatter(np.real(poles), np.imag(poles), label="Poles", marker="x")
 
-    circle = plt.Circle((0, 0), 1, fill=False)
-    plt.gca().add_artist(circle)
-
-    plt.title("Pole-Zero Plot")
-    plt.legend()
-    plt.grid()
-    plt.axis('equal')
+    theta = np.linspace(0.0, 2.0 * np.pi, 512)
+    ax.plot(np.cos(theta), np.sin(theta), linestyle="--", color="black", alpha=0.8, label="Unit circle")
+    ax.axhline(0.0, color="gray", linewidth=0.8)
+    ax.axvline(0.0, color="gray", linewidth=0.8)
+    ax.set_title("Pole-Zero Plot")
+    ax.set_xlabel("Real")
+    ax.set_ylabel("Imag")
+    ax.legend()
+    ax.grid()
+    ax.set_aspect("equal", "box")
 
     plt.show()
