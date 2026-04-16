@@ -88,11 +88,11 @@ def _reflect_pad(signal: np.ndarray, pad_len: int) -> tuple[np.ndarray, int]:
     if x.size <= 1 or pad_len <= 0:
         return x, 0
 
-    effective_pad = min(pad_len, x.size - 1)
-    return np.pad(x, (effective_pad, effective_pad), mode="reflect"), effective_pad
+    used_pad = min(pad_len, x.size - 1)
+    return np.pad(x, (used_pad, used_pad), mode="reflect"), used_pad
 
 
-def _apply_stage_iir(
+def _apply_iir_chain(
     signal: np.ndarray,
     sections: list[FilterSection],
     fs: float,
@@ -100,10 +100,10 @@ def _apply_stage_iir(
     zero_phase: bool,
     edge_pad_seconds: float,
 ) -> np.ndarray:
-    x = remove_dc_mean(np.asarray(signal, dtype=np.float64))
     if not sections:
-        return x
+        return np.asarray(signal, dtype=np.float64)
 
+    x = np.asarray(signal, dtype=np.float64)
     if zero_phase:
         pad_len = max(0, int(round(edge_pad_seconds * fs)))
         padded, used_pad = _reflect_pad(x, pad_len)
@@ -117,35 +117,78 @@ def _apply_stage_iir(
     return cascade_iir(x, sections)
 
 
-def compute_stage_only_outputs(raw_mv: np.ndarray, fs: float, cfg: DenoiseConfig) -> dict[str, np.ndarray]:
+def compute_stage_outputs(raw_mv: np.ndarray, fs: float, cfg: DenoiseConfig) -> dict[str, np.ndarray]:
+    x = remove_dc_mean(np.asarray(raw_mv, dtype=np.float64))
     sections = build_filter_sections(fs, cfg)
-    x_dc_removed = remove_dc_mean(np.asarray(raw_mv, dtype=np.float64))
 
-    stage_outputs: dict[str, np.ndarray] = {
-        "butterworth_only": _apply_stage_iir(
-            raw_mv,
-            sections[:1],
-            fs,
-            zero_phase=cfg.zero_phase,
-            edge_pad_seconds=cfg.edge_pad_seconds,
-        ),
-        "notch_only": _apply_stage_iir(
-            raw_mv,
-            sections[1:],
-            fs,
-            zero_phase=cfg.zero_phase,
-            edge_pad_seconds=cfg.edge_pad_seconds,
-        ),
-    }
+    stage1 = _apply_iir_chain(
+        x,
+        sections[:1],
+        fs,
+        zero_phase=cfg.zero_phase,
+        edge_pad_seconds=cfg.edge_pad_seconds,
+    )
+    stage2 = _apply_iir_chain(
+        x,
+        sections[:2],
+        fs,
+        zero_phase=cfg.zero_phase,
+        edge_pad_seconds=cfg.edge_pad_seconds,
+    )
+    stage3 = _apply_iir_chain(
+        x,
+        sections,
+        fs,
+        zero_phase=cfg.zero_phase,
+        edge_pad_seconds=cfg.edge_pad_seconds,
+    )
 
-    kaiser_taps = design_kaiser_lowpass_fir(
+    taps = design_kaiser_lowpass_fir(
         fs,
         cfg.kaiser_cutoff_hz,
         transition_hz=cfg.kaiser_transition_hz,
         attenuation_db=cfg.kaiser_attenuation_db,
     )
-    stage_outputs["kaiser_only"] = apply_fir_filter(x_dc_removed, kaiser_taps)
-    return stage_outputs
+    stage4 = apply_fir_filter(stage3, taps)
+
+    return {
+        "stage1": stage1,
+        "stage2": stage2,
+        "stage3": stage3,
+        "stage4": stage4,
+    }
+
+
+def save_stage_residuals_plot(
+    output_path: Path,
+    time_s: np.ndarray,
+    raw_mv: np.ndarray,
+    stage_outputs: dict[str, np.ndarray],
+    record_id: str,
+    lead_name: str,
+    powerline_hz: float,
+) -> None:
+    fig, axes = plt.subplots(4, 1, figsize=(12, 8), sharex=True, constrained_layout=True)
+
+    stage_labels = [
+        "Residual after Stage 1: Butterworth HPF",
+        f"Residual after Stage 2: Notch {powerline_hz:g} Hz",
+        f"Residual after Stage 3: Notch {2.0 * powerline_hz:g} Hz",
+        "Residual after Stage 4: Kaiser LPF (final)",
+    ]
+    stage_keys = ["stage1", "stage2", "stage3", "stage4"]
+
+    for idx, key in enumerate(stage_keys):
+        residual = np.asarray(raw_mv, dtype=np.float64) - np.asarray(stage_outputs[key], dtype=np.float64)
+        axes[idx].plot(time_s, residual, color="tab:red", linewidth=0.8)
+        axes[idx].set_ylabel("Residual (mV)")
+        axes[idx].set_title(stage_labels[idx])
+        axes[idx].grid(True, alpha=0.3)
+
+    axes[-1].set_xlabel("Time (s)")
+    fig.suptitle(f"Record {record_id} ({lead_name}) - Stage Residual Progression")
+    fig.savefig(output_path, dpi=160)
+    plt.close(fig)
 
 
 def save_snr_plot(output_path: Path, summary_rows: list[dict[str, float | str]]) -> None:
@@ -277,25 +320,6 @@ def main() -> None:
             print(f"{k}: {v:.3f}")
 
         lead_name = header.channels[args.channel].lead_name
-        stage_only_outputs = compute_stage_only_outputs(raw_mv, fs, cfg)
-
-        stage_plot_specs = [
-            ("butterworth_only", "Butterworth only"),
-            ("notch_only", "Notch only"),
-            ("kaiser_only", "Kaiser only"),
-        ]
-        for stage_key, stage_label in stage_plot_specs:
-            stage_plot_path = args.output_dir / f"record_{record_id}_{stage_key}.png"
-            save_overlay_plot(
-                stage_plot_path,
-                time_s,
-                raw_mv,
-                stage_only_outputs[stage_key],
-                record_id,
-                lead_name,
-                comparison_label=stage_label,
-            )
-
         plot_path = args.output_dir / f"record_{record_id}_segment.png"
         save_overlay_plot(
             plot_path,
@@ -305,6 +329,18 @@ def main() -> None:
             record_id,
             lead_name,
             comparison_label="All stages",
+        )
+
+        stage_outputs = compute_stage_outputs(raw_mv, fs, cfg)
+        stage_residuals_path = args.output_dir / f"record_{record_id}_stage_residuals.png"
+        save_stage_residuals_plot(
+            stage_residuals_path,
+            time_s,
+            raw_mv,
+            stage_outputs,
+            record_id,
+            lead_name,
+            args.powerline_hz,
         )
 
         if args.save_csv:

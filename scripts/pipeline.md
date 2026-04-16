@@ -1,6 +1,6 @@
 # ECG Denoising Pipeline
 
-This document describes the full denoising chain used in this project.
+This document describes the current denoising chain, outputs, and ownership notes used in this project.
 
 ## 1. Input Segment
 
@@ -95,6 +95,40 @@ Residual shows what the pipeline removed.
 - See [../src/ecg_denoise/analysis.py](../src/ecg_denoise/analysis.py)
 - See [run_denoise_demo.py](run_denoise_demo.py)
 
+## 8. Per-Record Output Images (Current)
+
+For each record in the default set (`100, 101, 102, 200, 201, 202`), the main demo now saves two images:
+
+1. `record_<id>_segment.png`
+- Panel 1: raw vs denoised
+- Panel 2: residual
+
+2. `record_<id>_stage_residuals.png`
+- Residual after Stage 1: Butterworth HPF
+- Residual after Stage 2: Notch at powerline (default 60 Hz)
+- Residual after Stage 3: Notch at 2nd harmonic (120 Hz)
+- Residual after Stage 4: Kaiser LPF (final)
+
+Outputs are written to `../outputs/` by [run_denoise_demo.py](run_denoise_demo.py).
+
+## 9. Synthetic Noise Demo (Record 100)
+
+The synthetic demo script injects three noise sources into record 100 and then denoises:
+
+- Breathing (low-frequency baseline drift)
+- Powerline interference (60 Hz + harmonic)
+- Muscle artifact bursts (high-frequency)
+
+Relevant files:
+
+- [../src/ecg_denoise/synthetic_noise.py](../src/ecg_denoise/synthetic_noise.py)
+- [run_record100_synthetic_demo.py](run_record100_synthetic_demo.py)
+
+Synthetic demo outputs include:
+
+- `record_100_synthetic_denoise.png`
+- `record_100_synthetic_components.png`
+
 ## Stage Order Summary
 
 1. Input segment (mV)
@@ -103,3 +137,11 @@ Residual shows what the pipeline removed.
 4. Notch IIR (plus optional 2nd harmonic notch)
 5. Kaiser low-pass FIR
 6. Final denoised output + residual analysis
+
+## Contributor Mapping (Code Links)
+
+- Siddartha Guha: Butterworth HPF design in [../src/ecg_denoise/butterworth_hpf.py](../src/ecg_denoise/butterworth_hpf.py#L9)
+- Rudra Ajit Singh: Notch filter design in [../src/ecg_denoise/notch_iir.py](../src/ecg_denoise/notch_iir.py#L9)
+- Anuvi Pareek: Kaiser FIR LPF design/windowing/DTFT analysis in [../src/ecg_denoise/kaiser_fir.py](../src/ecg_denoise/kaiser_fir.py#L35)
+- Riyan Dhiren Shah: dataset loading and segment extraction in [../src/ecg_denoise/mitdb_io.py](../src/ecg_denoise/mitdb_io.py#L151), synthetic noise addition in [../src/ecg_denoise/synthetic_noise.py](../src/ecg_denoise/synthetic_noise.py#L43)
+- Madhura Bhattu: SNR computation and pole-zero stability plotting in [../src/ecg_denoise/analysis.py](../src/ecg_denoise/analysis.py#L43), [../src/ecg_denoise/analysis.py](../src/ecg_denoise/analysis.py#L98), and final pole-zero visualization in [run_denoise_demo.py](run_denoise_demo.py#L216)

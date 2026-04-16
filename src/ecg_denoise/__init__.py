@@ -7,6 +7,7 @@ from .denoise import DenoiseConfig, denoise_ecg
 from .kaiser_fir import apply_fir_filter, design_kaiser_lowpass_fir
 from .mitdb_io import ChannelInfo, RecordHeader, available_records, load_record_segment, parse_header
 from .notch_iir import design_notch_iir
+from .synthetic_noise import SyntheticNoiseConfig, add_synthetic_noise
 
 __all__ = [
     "ChannelInfo",
@@ -22,4 +23,6 @@ __all__ = [
     "parse_header",
     "remove_dc_mean",
     "apply_fir_filter",
+    "SyntheticNoiseConfig",
+    "add_synthetic_noise",
 ]
