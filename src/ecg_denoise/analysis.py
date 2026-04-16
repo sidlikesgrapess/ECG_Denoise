@@ -86,9 +86,12 @@ def plot_ecg_signals(raw_signal, denoised_signal, fs):
 
     plt.show()
 
-    import scipy.signal as signal
-
 def plot_pole_zero(b, a):
+    try:
+        import scipy.signal as signal
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError("scipy is required for plot_pole_zero") from exc
+
     z, p, _ = signal.tf2zpk(b, a)
 
     plt.figure()
