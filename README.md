@@ -1,4 +1,4 @@
-# MIT-BIH ECG Denoising Project (Pure Signals and Systems)
+# MIT-BIH ECG Denoising Project 
 
 This project implements ECG denoising on MIT-BIH records using hand-built transfer-function filters and difference equations.
 
