@@ -6,6 +6,7 @@ from .iir_core import FilterSection
 
 
 def design_notch_iir(fs: float, notch_hz: float, bandwidth_hz: float = 2.0) -> FilterSection:
+    # Rudra Ajit Singh: Notch filter design.
     """Design a 2nd-order IIR notch filter centered at notch_hz."""
     if fs <= 0 or notch_hz <= 0 or bandwidth_hz <= 0:
         raise ValueError("fs, notch_hz, and bandwidth_hz must be positive")

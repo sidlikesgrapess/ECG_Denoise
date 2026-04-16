@@ -8,3 +8,4 @@ __pycache__/
 dataset/mit-bih-arrhythmia-database-1.0.0
 *.png
 *.csv
+tests/

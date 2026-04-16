@@ -6,6 +6,7 @@ from .iir_core import FilterSection
 
 
 def design_butterworth_highpass(fs: float, cutoff_hz: float) -> FilterSection:
+    # Siddartha Guha: Butterworth HPF design.
     """Design a 2nd-order Butterworth high-pass biquad using bilinear transform form."""
     if fs <= 0 or cutoff_hz <= 0:
         raise ValueError("fs and cutoff_hz must be positive")

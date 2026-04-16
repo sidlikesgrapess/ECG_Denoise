@@ -29,62 +29,31 @@ No external denoising library is used.
 - Plot generation and CSV export for short segments
 - Automated tests for filters and end-to-end short-segment pipeline
 
-## Filter Transfer Functions
+## What Each File Does
 
-The filters are implemented directly from transfer functions or windowed FIR design,
-with each stage in a separate Python file for collaboration.
+### Core package (`src/ecg_denoise`)
 
-### Butterworth High-pass (baseline wander removal)
+- `mitdb_io.py`: Reads MIT-BIH headers and decodes waveform samples, then loads a selected segment.
+- `dc_removal.py`: Removes DC offset by subtracting segment mean.
+- `butterworth_hpf.py`: Designs Butterworth high-pass IIR section for baseline-wander suppression.
+- `notch_iir.py`: Designs notch IIR section used for 60 Hz and optional 120 Hz suppression.
+- `kaiser_fir.py`: Designs and applies Kaiser-window FIR low-pass smoothing.
+- `iir_core.py`: Applies one IIR section and cascades multiple sections via difference equations.
+- `denoise.py`: Builds the full denoising chain (DC -> HPF -> notch(es) -> Kaiser FIR).
+- `analysis.py`: Computes metrics (including SNR) and contains plotting utilities.
+- `synthetic_noise.py`: Adds synthetic breathing, powerline, and muscle noise for controlled demos.
+- `__init__.py`: Public exports for the package.
 
-Analog prototype:
+### Scripts (`scripts`)
 
-H(s) = s / (s + wc)
+- `run_denoise_demo.py`: Main run for the six default records; saves per-record comparison and stage residual plots plus summary metrics.
+- `run_record100_synthetic_demo.py`: Record 100 synthetic-noise injection and denoising demo.
+- `pipeline.md`: Pipeline notes and contributor mapping.
 
-After bilinear transform (s = 2fs(1-z^-1)/(1+z^-1)), the digital coefficients become:
+### Tests (`tests`)
 
-- b = [2fs/(2fs+wc), -2fs/(2fs+wc)]
-- a = [1, (wc-2fs)/(2fs+wc)]
-
-Difference equation:
-
-y[n] = b0 x[n] + b1 x[n-1] - a1 y[n-1]
-
-### Notch (powerline)
-
-Digital notch section:
-
-H(z) = (1 - 2cos(w0)z^-1 + z^-2) / (1 - 2r cos(w0)z^-1 + r^2 z^-2)
-
-where w0 = 2pi f0 / fs.
-
-### Kaiser FIR (high-frequency smoothing)
-
-Low-pass FIR taps are built by windowing the ideal sinc impulse response:
-
-- h_ideal[n] = 2(fc/fs) sinc(2(fc/fs)(n-M/2))
-- h[n] = h_ideal[n] * w_kaiser[n]
-
-## Project Structure
-
-```
-src/ecg_denoise/
-  analysis.py
-  butterworth_hpf.py
-  dc_removal.py
-  denoise.py
-  filters.py
-  iir_core.py
-  kaiser_fir.py
-  mitdb_io.py
-  notch_iir.py
-scripts/
-  run_denoise_demo.py
-tests/
-  test_filters.py
-  test_pipeline.py
-requirements.txt
-README.md
-```
+- `test_filters.py`: Unit-level checks for filter design and behavior.
+- `test_pipeline.py`: End-to-end checks of the short-segment denoising flow.
 
 ## Setup
 
@@ -130,6 +99,7 @@ python scripts/run_denoise_demo.py --kaiser-cutoff-hz 35 --kaiser-transition-hz 
 Results are saved in `outputs/`:
 
 - `record_<id>_segment.png`
+- `record_<id>_stage_residuals.png`
 - `record_<id>_segment.csv` (if `--save-csv`)
 - `summary_metrics.csv`
 
