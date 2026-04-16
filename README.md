@@ -58,7 +58,8 @@ No external denoising library is used.
 ## Setup
 
 1. Activate your existing venv.
-2. Install dependencies:
+2. unzip the dataset
+3. Install dependencies:
 
 ```bash
 pip install -r requirements.txt
@@ -103,16 +104,3 @@ Results are saved in `outputs/`:
 - `record_<id>_segment.csv` (if `--save-csv`)
 - `summary_metrics.csv`
 
-## Run Tests
-
-```bash
-python -m unittest discover -s tests -v
-```
-
-## Notes For GitHub Upload
-
-- A `requirements.txt` file is included.
-- `.gitignore` excludes:
-  - local venv
-  - generated outputs
-  - local MIT-BIH dataset mirror
